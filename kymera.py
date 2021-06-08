@@ -152,11 +152,9 @@ def validate(value, minimum, maximum, fallback):
     if not isinstance(value, int):
         print("KymeraWarning: 'value' parameter must be an integer.")
         value = int(fallback)
-
     if not (minimum <= value <= maximum):
         print(f"KymeraWarning: 'value' parameter must be an integer between {minimum}-{maximum}.")
         value = int(fallback)
-    
     return value
 
 def pad(string):
@@ -174,7 +172,6 @@ def pad(string):
 # kymera logic #
 ################
 parser = argparse.ArgumentParser(prog="kymera",
-                                 usage="%(prog)s [options] path",
                                  description="Analyze PDF files")
 parser.add_argument("-d",
                     "--directory",
