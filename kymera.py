@@ -4,19 +4,30 @@
     MIT License
 """
 
-print("\nKymera")
-print("")
-print("Loading requirements...")
+VERSION = "1.1.0"
+
+print(f"\nKymera v{VERSION}")
+
+print("\nLoading requirements...")
 print("Please wait...")
 
 import os
 import sys
 import argparse
 
+import cv2
 import fitz
+import operator
 import pytesseract
 from PIL import Image
 from arkivist import Arkivist
+from maguro import Maguro
+
+import re
+import numpy as np
+import textdistance
+import pandas as pd
+from collections import Counter
 
 print("Done.")
 
@@ -33,21 +44,15 @@ def get_filenames(path, extensions=[]):
             filenames.append(filepath)
     return filenames
 
-def pdf_parse(directory, tesseract, threshold=80):
-    # do not change
-    extension = "pdf"
+def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, threshold=80):
     
     if not isinstance(directory, str):
         print("KymeraError: 'directory' parameter must be a string.")
         return
-
-    if not isinstance(threshold, int):
-        print("KymeraWarning: 'threshold' parameter must be an integer.")
-        threshold = 80
-
-    if not (1 <= threshold <= 100):
-        print("KymeraWarning: 'threshold' parameter must be an integer between 1-100.")
-        threshold = 80
+    
+    validate(threshold, 1, 100, 80)
+    validate(zoomfactor, 1, 5, 1)
+    validate(spellcheck, 0, 1, 0)
     
     print("\nParsing PDF files...")
     
@@ -56,22 +61,27 @@ def pdf_parse(directory, tesseract, threshold=80):
     
     prev = ""
     path = os.getcwd()
-    extensions = (extension)
+    extensions = ["pdf"]
+    lint = AutoCorrect()
     analysis = Arkivist(f"{directory}/analysis.json")
     filenames = get_filenames(directory, extensions)
     for index, filename in enumerate(filenames):
         fullpath = f"{directory}\{filename}"
-        doc = fitz.Document(fullpath)
-        print(f" - {fullpath}")
         
-        text = ""
-        for i in range(doc.page_count):
-            page = doc.loadPage(i)
-            pixels = page.getPixmap()
-            pixels.writePNG(f"{directory}\img\{filename[:-4]}-{i}.png")
-            img_path = f"{directory}\img\{filename[:-4]}-{i}.png"
-            abc = ocr_api2(img_path, tesseract)
-            text += abc
+        with fitz.Document(fullpath) as doc:
+            print(f" - {fullpath}")
+            
+            text = ""
+            for i, page in enumerate(doc):
+                temp = page.getText()
+                if temp != "":
+                    text += temp
+                else:
+                    matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
+                    pixels = page.getPixmap(matrix=matrix)
+                    pixels.writePNG(f"{directory}\img\{filename[:-4]}-{i}.png")
+                    img_path = f"{directory}\img\{filename[:-4]}-{i}.png"
+                    text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
         analysis.set(filename, {"text": text})
 
 def ocr_api2(path, tesseract):
@@ -82,8 +92,87 @@ def ocr_api2(path, tesseract):
         print(" - Error while using PyTesseract.\n\t", e)
         return ""
 
+class AutoCorrect:
+    def __init__(self):
+        self.jargons = Maguro("data/en20k.txt", "\n")    
+        with open("data/python.txt", "r", encoding="utf8") as file:
+            self.jargons.extend(re.findall('\w+', file.read().lower()))
+        with open("data/custom.txt", "r", encoding="utf8") as file:
+            self.jargons.extend(re.findall('\w+', file.read().lower()))
+        
+        self.vocabulary = set(self.jargons.unpack())
+        
+        self.frequency = dict(Counter(self.jargons.unpack()))
+        for item in Maguro("data/enwiki-20190320-words-frequency.txt", "\n").items():
+            if " " in item:
+                word, frequency = item.split(" ")
+                frequency = self.frequency.get(str(word), 0) + int(frequency)
+                self.frequency.update({str(word): frequency})
+        
+        self.frequency = dict(sorted(self.frequency.items(), key=operator.itemgetter(1),reverse=True))
+        self.frequency = {k: self.frequency[k] for k in list(self.frequency)[:10000]}
+        
+        self.probability = {}
+        total = sum(self.frequency.values()) 
+        for item in self.frequency.keys():
+            self.probability[item] = self.frequency[item]/total
 
-# kymera logic
+    def autocorrect(self, content, spellcheck=0):
+        if spellcheck != 1:
+            return content
+            
+        autocorrected = []
+        for line in pad(content).split("\n"):
+            for word in line.split(" "):
+                if word.strip() != "":
+                    temp = word.lower()
+                    if temp in self.vocabulary:
+                        autocorrected.append(word)
+                    else:
+                        try:
+                            # https://predictivehacks.com/how-to-build-an-autocorrect-in-python/
+                            df = pd.DataFrame.from_dict(self.probability, orient="index").reset_index()
+                            df = df.rename(columns={"index": "Word", 0: "Probability"})
+                            df['Similarity'] = [1-(textdistance.Jaccard(qval=2).distance(w, temp)) for w in self.vocabulary]
+                            output = df.sort_values(['Similarity'], ascending=False).head()
+                            autocorrected.append(output['Word'].iloc[0])
+                        except:
+                            autocorrected.append(word)
+                autocorrected.append(" ")
+            autocorrected.append("\n")
+        return "".join(autocorrected)
+
+def handwriting(path):
+    img = cv2.imread(path)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    
+    _, contours, _  = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+def validate(value, minimum, maximum, fallback):
+    if not isinstance(value, int):
+        print("KymeraWarning: 'value' parameter must be an integer.")
+        value = int(fallback)
+
+    if not (minimum <= value <= maximum):
+        print(f"KymeraWarning: 'value' parameter must be an integer between {minimum}-{maximum}.")
+        value = int(fallback)
+    
+    return value
+
+def pad(string):
+    """ Decongest statements """
+    padded = string.replace("\r", "").replace("\t", " ")
+    symbols = ["#", "%", "*", ")", "+", "-", "=", ":",
+                "{", "}", "]", "\"", "'", "<", ">" ]
+    for item in symbols:
+        padded = padded.replace(item, f" {item} ")
+    return padded.replace("(", "( ")
+
+
+
+################
+# kymera logic #
+################
 parser = argparse.ArgumentParser(prog="kymera",
                                  usage="%(prog)s [options] path",
                                  description="Analyze PDF files")
@@ -106,6 +195,18 @@ parser.add_argument("-t",
                     type=str,
                     help="Filepath of the Tesseract executible file.")
 
+parser.add_argument("-z",
+                    "--zoomfactor",
+                    metavar="zoomfactor",
+                    type=int,
+                    help="Zoom factor for images, affects the quality of OCR results.")
+
+parser.add_argument("-s",
+                    "--spellcheck",
+                    metavar="spellcheck",
+                    type=int,
+                    help="Autocorrect misspellings on the OCR results.")
+
 args = parser.parse_args()
 
 # get PDF directory
@@ -116,7 +217,10 @@ if not check_path(directory):
 
 
 # set tesseract location
-settings = Arkivist("settings.json")
+if not check_path("data"):
+    os.makedirs("data")
+
+settings = Arkivist("data/settings.json")
 tesseract = args.tesseract
 if tesseract is None:
     tesseract = settings.get("tesseract", None)
@@ -134,17 +238,28 @@ if tesseract is None:
 # set answer key file
 answerkey = args.answerkey
 if answerkey is not None:
-    if not check_path(answerkey):
-        answerkey = None
-
-if answerkey is not None:
     if len(answerkey) >= 5:
         if answerkey[-3:] != "csv":
             answerkey = None
     else:
         answerkey = None
+    if answerkey is not None:
+        if not check_path(answerkey):
+            answerkey = None
 
 if answerkey is None:
     print("\nKymeraWarning: Answer Key CSV file was not found, skipping grading feature.")
 
-pdf_parse(directory, tesseract, threshold=80)
+# set the zoom factor
+zoomfactor = args.zoomfactor
+if zoomfactor is not None:
+    if not (1 <= zoomfactor <= 5):
+        zoomfactor = 2
+
+# set the spell check flag
+spellcheck = args.spellcheck
+if spellcheck is not None:
+    if not (0 <= spellcheck <= 1):
+        spellcheck = 0
+
+pdf_parse(directory, tesseract, answerkey=answerkey, zoomfactor=zoomfactor, spellcheck=spellcheck, threshold=80)
