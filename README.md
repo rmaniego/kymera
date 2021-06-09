@@ -1,7 +1,10 @@
-# kymera v1.1.0
+![](/resources/banner.png)
+
+# kymera v1.2.0
 PDF submissions auto-checker for teachers.
 
 ## Requirements
+- [cv2](https://pypi.org/project/cv2/) `pip install cv2`
 - [Pillow](https://pypi.org/project/Pillow/) `pip install Pillow`
 - [PyMuPDF](https://pypi.org/project/PyMuPDF/) `pip install PyMuPDF`
 - [Tesseract](https://github.com/tesseract-ocr/tesseract) version 5.0.0.x or later, download appropriate [binary file](https://tesseract-ocr.github.io/tessdoc/Home.html).
@@ -17,14 +20,17 @@ PDF submissions auto-checker for teachers.
 
 ## Usage
 ```bash
-$ py kymera.py -d "<path_to_pdf_files>" -t "<path_to_tesseract.exe>" -a "<path_to_answerkey.csv> -z 2 -s 1"
+$ py kymera.py -d "<path_to_pdf_files>" -o "<path_to_tesseract.exe>" -a "<path_to_answerkey.csv> -z 2 -s 1 -t 90 -w 1 -g 1"
 ```
 
 **1.** `-d <path>` - Full path of the dirctory containing the PDF files to analyze. 
-**2.** `-t <*.exe>` - Full path of the tesseract executable file.
+**2.** `-o <*.exe>` - Full path of the tesseract executable file for OCR API.
 **3.** `-a <*.csv>` - Full path to the answer key file, must be in csv format.
 **4.** `-z <1>` - Zoom factor (1-5; default = 1), affects the quality of the OCR results. Higher value means higher quality, but may slow down the analysis.
 **5.** `-s <0>` - Spell check (0-1; default = 0), autocorrects mispellings on the OCR results.
+**6.** `-t <0>` - Threshold (1-100; default = 80), adjust tolearance level.
+**7.** `-w <0>` - Write to file (0-1; default = 0), write OCR results to file.
+**8.** `-g <0>` - Gather data (0-1; default = 0), gather character data from the documents.
 
 ## Answer Key format
 ```csv
@@ -38,7 +44,9 @@ $ py kymera.py -d "<path_to_pdf_files>" -t "<path_to_tesseract.exe>" -a "<path_t
 
 ## Features
 - [x] OCR, quality = low
-- [ ] Spellcheck, ongoing 
+- [ ] Spellcheck, ongoing
+- [x] Character collector
+- [ ] Character classifier
 - [ ] Grader, pending
 
 ## Status

@@ -4,7 +4,7 @@
     MIT License
 """
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 print(f"\nKymera v{VERSION}")
 
@@ -14,6 +14,7 @@ print("Please wait...")
 import os
 import sys
 import argparse
+from random import randint
 
 import cv2
 import fitz
@@ -21,6 +22,7 @@ import operator
 import pytesseract
 from PIL import Image
 from arkivist import Arkivist
+from sometime import Sometime
 from maguro import Maguro
 
 import re
@@ -44,20 +46,28 @@ def get_filenames(path, extensions=[]):
             filenames.append(filepath)
     return filenames
 
-def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, threshold=80):
+def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, threshold=80, write=0, gather=0):
     
     if not isinstance(directory, str):
         print("KymeraError: 'directory' parameter must be a string.")
         return
     
-    validate(threshold, 1, 100, 80)
-    validate(zoomfactor, 1, 5, 1)
-    validate(spellcheck, 0, 1, 0)
+    threshold = validate(threshold, 1, 100, 80)
+    zoomfactor = validate(zoomfactor, 1, 5, 1)
+    spellcheck = validate(spellcheck, 0, 1, 0)
+    write = validate(write, 0, 1, 0)
+    gather = validate(gather, 0, 1, 0)
     
     print("\nParsing PDF files...")
     
     if not check_path(f"{directory}/img"):
         os.makedirs(f"{directory}/img")
+
+    if not check_path(f"{directory}/text") and write == 1:
+        os.makedirs(f"{directory}/text")
+    
+    if not check_path("dataset"):
+        os.makedirs("dataset")
     
     prev = ""
     path = os.getcwd()
@@ -66,22 +76,23 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
     analysis = Arkivist(f"{directory}/analysis.json")
     filenames = get_filenames(directory, extensions)
     for index, filename in enumerate(filenames):
-        fullpath = f"{directory}\{filename}"
+        fullpath = f"{directory}/{filename}"
         
+        text = ""
         with fitz.Document(fullpath) as doc:
             print(f" - {fullpath}")
-            
-            text = ""
             for i, page in enumerate(doc):
-                temp = page.getText()
-                if temp != "":
-                    text += temp
-                else:
-                    matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
-                    pixels = page.getPixmap(matrix=matrix)
-                    pixels.writePNG(f"{directory}\img\{filename[:-4]}-{i}.png")
-                    img_path = f"{directory}\img\{filename[:-4]}-{i}.png"
-                    text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
+                matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
+                pixels = page.getPixmap(matrix=matrix)
+                pixels.writePNG(f"{directory}/img/{filename[:-4]}-{i}.png")
+                img_path = f"{directory}/img/{filename[:-4]}-{i}.png"
+                text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
+                if gather == 1:
+                    handwriting(img_path, )
+        if write == 1:
+            text_filename = ".".join(list(filename.split("."))[:-1])
+            with open(f"{directory}/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
+                file.write(text)
         analysis.set(filename, {"text": text})
 
 def ocr_api2(path, tesseract):
@@ -94,16 +105,16 @@ def ocr_api2(path, tesseract):
 
 class AutoCorrect:
     def __init__(self):
-        self.jargons = Maguro("data/en20k.txt", "\n")    
-        with open("data/python.txt", "r", encoding="utf8") as file:
+        self.jargons = Maguro("resources/en20k.txt", "\n")    
+        with open("resources/python.txt", "r", encoding="utf8") as file:
             self.jargons.extend(re.findall('\w+', file.read().lower()))
-        with open("data/custom.txt", "r", encoding="utf8") as file:
+        with open("resources/custom.txt", "r", encoding="utf8") as file:
             self.jargons.extend(re.findall('\w+', file.read().lower()))
         
         self.vocabulary = set(self.jargons.unpack())
         
         self.frequency = dict(Counter(self.jargons.unpack()))
-        for item in Maguro("data/enwiki-20190320-words-frequency.txt", "\n").items():
+        for item in Maguro("resources/enwiki-20190320-words-frequency.txt", "\n").items():
             if " " in item:
                 word, frequency = item.split(" ")
                 frequency = self.frequency.get(str(word), 0) + int(frequency)
@@ -143,10 +154,37 @@ class AutoCorrect:
         return "".join(autocorrected)
 
 def handwriting(path):
+    dataset = Maguro("dataset/files.txt", "\n")
+
     img = cv2.imread(path)
+
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    _, contours, _  = cv2.findContours(gray.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # cv2.imshow("gray", gray)
+
+    ret, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU)
+    # cv2.imshow("thresh", thresh)
+
+    contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=lambda contour: cv2.boundingRect(contour)[0])
+
+    for i, contour in enumerate(contours):
+        x, y, w, h = cv2.boundingRect(contour)
+        cropped = img[y:y + h, x:x + w].copy()
+        ts = Sometime().timestamp()
+        uid1 = str(randint(1, 99999)).zfill(5)
+        uid2 = str(randint(1, 99999)).zfill(5)
+        filename = f"dataset/{ts}_{uid1}_{uid2}.png"
+        dataset.append(filename)
+        cv2.imwrite(filename, resize(cropped))
+
+def resize(img):
+    # https://stackoverflow.com/a/65314036/4943299
+    h, w = img.shape[:2]
+    size = max((h, w))
+    min_size = np.amin([h,w])
+    crop_img = img[int(h/2-min_size/2):int(h/2+min_size/2), int(w/2-min_size/2):int(w/2+min_size/2)]
+    return cv2.resize(crop_img, (size, size), interpolation=cv2.INTER_AREA)
+        
 
 def validate(value, minimum, maximum, fallback):
     if not isinstance(value, int):
@@ -165,6 +203,13 @@ def pad(string):
     for item in symbols:
         padded = padded.replace(item, f" {item} ")
     return padded.replace("(", "( ")
+
+def default(value, minimum, maximum, fallback):
+    if value is not None:
+        if not (minimum <= value <= maximum):
+            return fallback
+        return value
+    return fallback
 
 
 
@@ -186,11 +231,17 @@ parser.add_argument("-a",
                     type=str,
                     help="Filepath of the answer key csv file.")
 
-parser.add_argument("-t",
-                    "--tesseract",
-                    metavar="tesseract",
+parser.add_argument("-o",
+                    "--ocr",
+                    metavar="ocr",
                     type=str,
                     help="Filepath of the Tesseract executible file.")
+
+parser.add_argument("-x",
+                    "--threshold",
+                    metavar="threshold",
+                    type=int,
+                    help="Tolerance level for grading.")
 
 parser.add_argument("-z",
                     "--zoomfactor",
@@ -203,6 +254,18 @@ parser.add_argument("-s",
                     metavar="spellcheck",
                     type=int,
                     help="Autocorrect misspellings on the OCR results.")
+
+parser.add_argument("-w",
+                    "--write",
+                    metavar="write",
+                    type=int,
+                    help="Dump OCR results to plain text file.")
+
+parser.add_argument("-g",
+                    "--gather",
+                    metavar="gather",
+                    type=int,
+                    help="Collect character data from documents.")
 
 args = parser.parse_args()
 
@@ -217,8 +280,8 @@ if not check_path(directory):
 if not check_path("data"):
     os.makedirs("data")
 
-settings = Arkivist("data/settings.json")
-tesseract = args.tesseract
+settings = Arkivist("resources/settings.json")
+tesseract = args.ocr
 if tesseract is None:
     tesseract = settings.get("tesseract", None)
 
@@ -244,19 +307,22 @@ if answerkey is not None:
         if not check_path(answerkey):
             answerkey = None
 
-if answerkey is None:
-    print("\nKymeraWarning: Answer Key CSV file was not found, skipping grading feature.")
+# if answerkey is None:
+#    print("\nKymeraWarning: Answer Key CSV file was not found, skipping grading feature.")
 
 # set the zoom factor
-zoomfactor = args.zoomfactor
-if zoomfactor is not None:
-    if not (1 <= zoomfactor <= 5):
-        zoomfactor = 2
+threshold = default(args.threshold, 1, 100, 80)
+
+# set the zoom factor
+zoomfactor = default(args.zoomfactor, 1, 5, 1)
 
 # set the spell check flag
-spellcheck = args.spellcheck
-if spellcheck is not None:
-    if not (0 <= spellcheck <= 1):
-        spellcheck = 0
+spellcheck = default(args.spellcheck, 0, 1, 0)
 
-pdf_parse(directory, tesseract, answerkey=answerkey, zoomfactor=zoomfactor, spellcheck=spellcheck, threshold=80)
+# set the write to file flag
+write = default(args.write, 0, 1, 0)
+
+# set the gather to file flag
+gather = default(args.gather, 0, 1, 0)
+
+pdf_parse(directory, tesseract, answerkey=answerkey, zoomfactor=zoomfactor, spellcheck=spellcheck, threshold=80, write=write, gather=gather)
