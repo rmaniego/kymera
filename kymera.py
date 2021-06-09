@@ -212,10 +212,10 @@ def default(value, minimum, maximum, fallback):
     return fallback
 
 
-
 ################
 # kymera logic #
 ################
+
 parser = argparse.ArgumentParser(prog="kymera",
                                  description="Analyze PDF files")
 parser.add_argument("-d",
