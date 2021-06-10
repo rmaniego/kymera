@@ -20,7 +20,7 @@ def check_path(path):
 
 class KymeraGui:
     def __init__(self):
-        # https://stackoverflow.com/a/23840010/4943299
+        # https:/stackoverflow.com/a/23840010/4943299
         self.window = tk.Tk()
         self.window.title("Kymera GUI")
         if "nix" in platform:
@@ -101,8 +101,7 @@ def validate(value, minimum, maximum, fallback):
 
 def reload(window):
     valid = True
-    directory = window.input_directory.get().strip()
-    
+    directory = window.input_directory.get().strip()    
     window.input_ocr_data.config(state=tk.NORMAL)
     if not check_path(directory):
         window.input_directory.delete(0, tk.END)
@@ -127,20 +126,28 @@ def reload(window):
         window.input_answerkey.insert(0, "path/to/answerkey.csv")
         window.input_answerkey_data.delete("1.0", tk.END)
         window.input_answerkey_data.config(state=tk.DISABLED)
-
-    grade = int(window.input_grade.get().strip())
-    grade = validate(grade, 0, 100, 0)
-        
+    
     if valid:
+        grade = 0
+        try:
+            grade = int(window.input_grade.get().strip())
+        except:
+            pass
+        grade = validate(grade, 0, 100, 0)
+        analysis = Arkivist(f"{directory}/kymera/analysis.json")
+        file = window.label_file["text"]
+        file_data = analysis.get(file, {})
+        file_data.update({"grade": grade})
+        analysis.set(file, file_data)
         navigate(window)
 
 def navigate(window, step=0):
     directory = window.input_directory.get().strip()
-    if not check_path(directory):
-        analysis = Arkivist(f"{directory}/analysis.json")
+    if check_path(directory):
+        analysis = Arkivist(f"{directory}/kymera/analysis.json")
         if not analysis.is_empty():
             files = list(analysis.keys())
-            state = Arkivist(f"{directory}/state.json")
+            state = Arkivist(f"{directory}/kymera/state.json")
             
             file = state.get("file", "")
             index = int(state.get("index", 0))
@@ -211,7 +218,7 @@ def modify_ocr(window):
     directory = window.input_directory.get().strip()
     file = window.label_file["text"]
     modified = window.input_ocr_data.get("1.0", tk.END)
-    analysis = Arkivist(f"{directory}/analysis.json")
+    analysis = Arkivist(f"{directory}/kymera/analysis.json")
     file_data = analysis.get(file, {})
     file_data.update({"text": modified})
     analysis.set(file, file_data)

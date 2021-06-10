@@ -4,7 +4,7 @@
     MIT License
 """
 
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 
 print(f"\nKymera v{VERSION}")
 
@@ -59,11 +59,11 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
     
     print("\nParsing PDF files...")
     
-    if not check_path(f"{directory}/img"):
-        os.makedirs(f"{directory}/img")
+    if not check_path(f"{directory}/kymera/img"):
+        os.makedirs(f"{directory}/kymera/img")
 
-    if not check_path(f"{directory}/text") and write == 1:
-        os.makedirs(f"{directory}/text")
+    if not check_path(f"{directory}/kymera/text") and write == 1:
+        os.makedirs(f"{directory}/kymera/text")
     
     if not check_path("dataset"):
         os.makedirs("dataset")
@@ -72,7 +72,7 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
     path = os.getcwd()
     extensions = ["pdf"]
     lint = AutoCorrect()
-    analysis = Arkivist(f"{directory}/analysis.json")
+    analysis = Arkivist(f"{directory}/kymera/analysis.json")
     filenames = get_filenames(directory, extensions)
     for index, filename in enumerate(filenames):
         fullpath = f"{directory}/{filename}"
@@ -85,8 +85,8 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
                 count = i + 1
                 matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
                 pixels = page.getPixmap(matrix=matrix)
-                pixels.writePNG(f"{directory}/img/{filename[:-4]}-{i}.png")
-                img_path = f"{directory}/img/{filename[:-4]}-{i}.png"
+                pixels.writePNG(f"{directory}/kymera/img/{filename[:-4]}-{i}.png")
+                img_path = f"{directory}/kymera/img/{filename[:-4]}-{i}.png"
                 text += f"===\nPAGE {count}\n===\n"
                 text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
                 text += "\n"
@@ -95,7 +95,7 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
                 pages.append(img_path)
         if write == 1:
             text_filename = ".".join(list(filename.split("."))[:-1])
-            with open(f"{directory}/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
+            with open(f"{directory}/kymera/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
                 file.write(text)
         analysis.set(filename, {"pages": pages, "text": text})
 
