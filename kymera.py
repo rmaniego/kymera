@@ -12,24 +12,23 @@ print("\nLoading requirements...")
 print("Please wait...")
 
 import os
+import re
 import sys
 import argparse
 from random import randint
+from collections import Counter
 
 import cv2
 import fitz
 import operator
+import numpy as np
 import pytesseract
+import textdistance
+import pandas as pd
 from PIL import Image
 from arkivist import Arkivist
 from sometime import Sometime
 from maguro import Maguro
-
-import re
-import numpy as np
-import textdistance
-import pandas as pd
-from collections import Counter
 
 print("Done.")
 
@@ -79,6 +78,7 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
         fullpath = f"{directory}/{filename}"
         
         text = ""
+        pages = []
         with fitz.Document(fullpath) as doc:
             print(f" - {fullpath}")
             for i, page in enumerate(doc):
@@ -88,12 +88,13 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
                 img_path = f"{directory}/img/{filename[:-4]}-{i}.png"
                 text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
                 if gather == 1:
-                    handwriting(img_path, )
+                    handwriting(img_path)
+                pages.append(img_path)
         if write == 1:
             text_filename = ".".join(list(filename.split("."))[:-1])
             with open(f"{directory}/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
                 file.write(text)
-        analysis.set(filename, {"text": text})
+        analysis.set(filename, {"pages": pages, "text": text})
 
 def ocr_api2(path, tesseract):
     try:

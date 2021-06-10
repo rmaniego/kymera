@@ -6,6 +6,7 @@ import os
 import tkinter as tk
 from sys import platform
 
+from arkivist import Arkivist
 from PIL import Image, ImageTk
 
 
@@ -45,10 +46,10 @@ class KymeraGui:
         self.gallery.image = image
         self.gallery.place(x=10, y=50, width=self.gallery_max_width, height=int(((screen_height) - 150)))
         
-        self.button_previous = tk.Button(text="Previous", command=view_previous)
+        self.button_previous = tk.Button(text="Previous")
         self.button_previous.place(x=10, y=int((screen_height - 90)), width=100)
         
-        self.button_next = tk.Button(text="Next", command=view_previous)
+        self.button_next = tk.Button(text="Next")
         self.button_next.place(x=int((self.gallery_max_width - 90)), y=int((screen_height - 90)), width=100)
         
         self.input_ocr_data = tk.Text(master=self.viewer)
@@ -84,42 +85,101 @@ def image_loader(path, gallery_max_width):
     image = image.resize((gallery_max_width, image_new_height), Image.LANCZOS)
     return ImageTk.PhotoImage(image)
 
+def validate(value, minimum, maximum, fallback):
+    if not isinstance(value, int):
+        print("KymeraWarning: Parameter must be an integer.")
+        value = int(fallback)
+    if not (minimum <= value <= maximum):
+        print(f"KymeraWarning: Parameter must be an integer between {minimum}-{maximum}.")
+        value = int(fallback)
+    return value
+
 def reload(window):
     valid = True
     directory = window.input_directory.get().strip()
     if not check_path(directory):
         window.input_directory.delete(0, tk.END)
         window.input_directory.insert(0, "path/to/pdf/directory")
+        
         image = image_loader("resources/banner.png", window.gallery_max_width)
         window.gallery.configure(image=image)
         window.gallery.image = image
+        
         window.button_previous.config(state="disabled")
         window.button_next.config(state="disabled")
         window.input_grade.delete(0, tk.END)
         window.input_grade.insert(0, "0")
-        window.input_ocr_data.delete('1.0', tk.END)
+        window.input_ocr_data.delete("1.0", tk.END)
         valid = False
     
     answerkey = window.input_answerkey.get().strip()
     if not check_path(answerkey):
         window.input_answerkey.delete(0, tk.END)
         window.input_answerkey.insert(0, "path/to/answerkey.csv")
-        window.input_answerkey_data.delete('1.0', tk.END)
-        valid = False
+        window.input_answerkey_data.delete("1.0", tk.END)
 
-    grade = window.input_grade.get().strip()
+    grade = int(window.input_grade.get().strip())
     grade = validate(grade, 0, 100, 0)
         
-    if not valid:
-        pass
-    else:
-        state = Arkivist(f"{directory}/logs.json")
+    if valid:
+        navigate(window)
 
-def view_previous():
-    print("Hello, world!")
+def navigate(window, step=0):
+    directory = window.input_directory.get().strip()
+    analysis = Arkivist(f"{directory}/analysis.json")
+    if not analysis.is_empty():
+        files = list(analysis.keys())
+        state = Arkivist(f"{directory}/state.json")
+        
+        file = state.get("file", "")
+        index = int(state.get("index", 0))
+        page = int(state.get("page", 0))
+        
+        pages = ["resources/banner.png"]
+        file = files[index]
+        file_data = analysis.get(file, {})
+        if len(file_data) > 0:
+            pages = file_data.get("pages", pages)
+        
+        page += step
+        if page < 0:
+            index -= 1
+            page = 0
+        if page > (len(pages)-1):
+            index += 1
+            page = 0
+            if index > (len(files)-1):
+                index = (len(files)-1)
+                file = files[index]
+                file_data = analysis.get(file, {})
+                if len(file_data) > 0:
+                    pages = file_data.get("pages", pages)
+                page = (len(pages)-1)
+        if index < 0:
+            index = 0
+        
+        state.set("index", index)
+        state.set("page", page)
+        file = files[index]
+        file_data = analysis.get(file, {})
+        
+        page_img_link = "resources/banner.png"
+        if len(file_data) > 0:
+            pages = file_data.get("pages", [])
+            if len(pages) > 1 and page <= (len(pages)-1):
+                page_img_link = pages[page]
+
+        try:
+            image = image_loader(page_img_link, window.gallery_max_width)
+        except:
+            image = image_loader("resources/banner.png", window.gallery_max_width)
+        window.gallery.configure(image=image)
+        window.gallery.image = image
 
 if __name__ == "__main__":
     root = KymeraGui()
     window = root.window
-    window.bind('<Return>', (lambda x: reload(root)))
+    window.bind("<Return>", (lambda x: reload(root)))
+    root.button_previous.bind("<Button-1>", (lambda x: navigate(root, -1)))
+    root.button_next.bind("<Button-1>", (lambda x: navigate(root, 1)))
     window.tk.mainloop()
