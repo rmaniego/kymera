@@ -3,6 +3,7 @@
 ################
 
 import os
+import subprocess
 import tkinter as tk
 from sys import platform
 
@@ -108,14 +109,12 @@ def validate(value, minimum, maximum, fallback):
 def reload(window):
     valid = True
     directory = window.input_directory.get().strip()
-    window.button_previous.config(state=tk.NORMAL)
-    window.button_next.config(state=tk.NORMAL)
-    window.input_ocr_data.config(state=tk.NORMAL)
-    window.input_grade.config(state=tk.NORMAL)
-    window.check_locked.config(state=tk.NORMAL)
+    analysis = Arkivist(f"{directory}/kymera/analysis.json")
+    process = None
     if not check_path(directory):
         window.input_directory.delete(0, tk.END)
         window.input_directory.insert(0, "path/to/pdf/directory")
+        
         
         image = image_loader("resources/banner.png", window.gallery_max_width)
         window.gallery.configure(image=image)
@@ -130,6 +129,16 @@ def reload(window):
         window.input_ocr_data.delete("1.0", tk.END)
         window.input_ocr_data.config(state=tk.DISABLED)
         valid = False
+    else:
+        if analysis.is_empty():
+            valid = False
+            process = subprocess.Popen(["py", "kymera.py", "-d", directory, "-z", "1", "-w", "1"])
+        else:
+            window.button_previous.config(state=tk.NORMAL)
+            window.button_next.config(state=tk.NORMAL)
+            window.input_ocr_data.config(state=tk.NORMAL)
+            window.input_grade.config(state=tk.NORMAL)
+            window.check_locked.config(state=tk.NORMAL)
     
     answerkey = window.input_answerkey.get().strip()
     window.input_answerkey_data.config(state=tk.NORMAL)
@@ -146,13 +155,15 @@ def reload(window):
         except:
             pass
         grade = validate(grade, 0, 100, 0)
-        analysis = Arkivist(f"{directory}/kymera/analysis.json")
         file = window.label_file["text"]
         if check_path(f"{directory}/{file}"):
             file_data = analysis.get(file, {})
             file_data.update({"grade": grade})
             analysis.set(file, file_data)
         navigate(window)
+    
+    if process is not None:
+        return reload(window)
 
 def navigate(window, step=0):
     directory = window.input_directory.get().strip()
