@@ -4,7 +4,7 @@
     MIT License
 """
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 print(f"\nKymera v{VERSION}")
 
@@ -82,11 +82,14 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
         with fitz.Document(fullpath) as doc:
             print(f" - {fullpath}")
             for i, page in enumerate(doc):
+                count = i + 1
                 matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
                 pixels = page.getPixmap(matrix=matrix)
                 pixels.writePNG(f"{directory}/img/{filename[:-4]}-{i}.png")
                 img_path = f"{directory}/img/{filename[:-4]}-{i}.png"
+                text += f"===\nPAGE {count}\n===\n"
                 text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
+                text += "\n"
                 if gather == 1:
                     handwriting(img_path)
                 pages.append(img_path)
