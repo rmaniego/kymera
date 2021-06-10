@@ -5,6 +5,8 @@
 import os
 import subprocess
 import tkinter as tk
+from tkinter import ttk
+from time import sleep
 from sys import platform
 
 from arkivist import Arkivist
@@ -29,30 +31,30 @@ class KymeraGui:
         else:
             self.window.state("zoomed")
         
-        screen_width = self.window.winfo_screenwidth()
-        screen_height = self.window.winfo_screenheight()
+        self.screen_width = self.window.winfo_screenwidth()
+        self.screen_height = self.window.winfo_screenheight()
         
-        self.viewer = tk.Frame(master=self.window, width=int((screen_width * .66)), height=screen_height, bg="yellow")
+        self.viewer = tk.Frame(master=self.window, width=int((self.screen_width * .66)), height=self.screen_height, bg="yellow")
         self.viewer.pack(fill=tk.BOTH, side=tk.LEFT)
         
         self.input_directory = tk.Entry(master=self.viewer)
         self.input_directory.config(font=("Consolas", 16))
         self.input_directory.insert(0, "path/to/pdf/directory")
-        self.input_directory.place(x=10, y=10, width=int(((screen_width * .66) - 20)))
+        self.input_directory.place(x=10, y=10, width=int(((self.screen_width * .66) - 20)))
         
-        self.gallery_max_width = int(((screen_width * .33) - 20))
-        self.gallery_max_height = int(((screen_height * .75) - 50))
+        self.gallery_max_width = int(((self.screen_width * .33) - 20))
+        self.gallery_max_height = int(((self.screen_height * .75) - 50))
         
         image = image_loader("resources/banner.png", self.gallery_max_width)
         self.gallery = tk.Label(master=self.viewer, image=image, anchor=tk.CENTER)
         self.gallery.image = image
-        self.gallery.place(x=10, y=50, width=self.gallery_max_width, height=int(((screen_height) - 150)))
+        self.gallery.place(x=10, y=50, width=self.gallery_max_width, height=int(((self.screen_height) - 150)))
         
         self.button_previous = tk.Button(text="Previous")
-        self.button_previous.place(x=10, y=int((screen_height - 90)), width=100)
+        self.button_previous.place(x=10, y=int((self.screen_height - 90)), width=100)
         
         self.button_next = tk.Button(text="Next")
-        self.button_next.place(x=int((self.gallery_max_width - 90)), y=int((screen_height - 90)), width=100)
+        self.button_next.place(x=int((self.gallery_max_width - 90)), y=int((self.screen_height - 90)), width=100)
         
         self.input_ocr_data = tk.Text(master=self.viewer)
         self.input_ocr_data.config(font=("Consolas", 12), state=tk.DISABLED)
@@ -65,31 +67,33 @@ class KymeraGui:
         
         self.label_grade = tk.Label(master=self.viewer, text="Grade:")
         self.label_grade.config(font=("Consolas", 20))
-        self.label_grade.place(x=int((self.gallery_max_width + 30)), y=int((screen_height - 140)), width=120)
+        self.label_grade.place(x=int((self.gallery_max_width + 30)), y=int((self.screen_height - 140)), width=120)
         
         self.input_grade = tk.Entry(master=self.viewer)
         self.input_grade.config(font=("Consolas", 20), state=tk.DISABLED)
         self.input_grade.insert(0, "0")
-        self.input_grade.place(x=int((self.gallery_max_width + 170)), y=int((screen_height - 140)), width=int((self.gallery_max_width - 140)))
+        self.input_grade.place(x=int((self.gallery_max_width + 170)), y=int((self.screen_height - 140)), width=int((self.gallery_max_width - 140)))
         
         self.locked = tk.IntVar()
         self.check_locked = tk.Checkbutton(master=self.viewer, text="Skip during analysis", var=self.locked, anchor="w")
         self.check_locked.config(state=tk.DISABLED)
-        self.check_locked.place(x=int((self.gallery_max_width + 30)), y=int((screen_height - 90)), width=self.gallery_max_width)
+        self.check_locked.place(x=int((self.gallery_max_width + 30)), y=int((self.screen_height - 90)), width=self.gallery_max_width)
         self.locked.set(0)
         
-        self.editor = tk.Frame(master=self.window, width=int((screen_width * .33)), height=screen_height, bg="blue")
+        self.editor = tk.Frame(master=self.window, width=int((self.screen_width - (self.screen_width* .66))), height=self.screen_height, bg="blue")
         self.editor.pack(fill=tk.BOTH, side=tk.LEFT)
         
         self.input_answerkey = tk.Entry(master=self.editor)
         self.input_answerkey.config(font=("Consolas", 16))
         self.input_answerkey.insert(0, "path/to/answerkey.csv")
-        self.input_answerkey.place(x=10, y=10, width=int(((screen_width * .33) - 20)))
+        self.input_answerkey.place(x=10, y=10, width=int(((self.screen_width * .33) - 10)))
         
         self.input_answerkey_data = tk.Text(master=self.editor)
         self.input_answerkey_data.config(font=("Consolas", 12), state=tk.DISABLED)
         # self.input_answerkey_data.insert(0, "Lorem ipsum")
-        self.input_answerkey_data.place(x=10, y=50, width=self.gallery_max_width, height=int(((screen_height) - 110)))
+        self.input_answerkey_data.place(x=10, y=50, width=int(((self.screen_width * .33) - 10)), height=int(((self.screen_height) - 110)))
+        
+        self.process = None
 
 def image_loader(path, gallery_max_width):
     image = Image.open(path)
@@ -107,10 +111,14 @@ def validate(value, minimum, maximum, fallback):
     return value
 
 def reload(window):
+    if window.process is not None:
+        if window.process.poll() is not None:
+            window.process = None
+        return
+    
     valid = True
     directory = window.input_directory.get().strip()
     analysis = Arkivist(f"{directory}/kymera/analysis.json")
-    process = None
     if not check_path(directory):
         window.input_directory.delete(0, tk.END)
         window.input_directory.insert(0, "path/to/pdf/directory")
@@ -132,7 +140,21 @@ def reload(window):
     else:
         if analysis.is_empty():
             valid = False
-            process = subprocess.Popen(["py", "kymera.py", "-d", directory, "-z", "1", "-w", "1"])
+            window.button_previous.config(state=tk.DISABLED)
+            window.button_next.config(state=tk.DISABLED)
+            window.label_file["text"] = "File:"
+            window.input_grade.delete(0, tk.END)
+            window.input_grade.insert(0, "0")
+            window.input_grade.config(state=tk.DISABLED)
+            window.check_locked.config(state=tk.DISABLED)
+            window.input_ocr_data.delete("1.0", tk.END)
+            window.input_ocr_data.config(state=tk.DISABLED)
+            window.locked.set(0)
+            if window.process is None:
+                image = image_loader("resources/banner.png", window.gallery_max_width)
+                window.gallery.configure(image=image)
+                window.gallery.image = image
+                window.process = subprocess.Popen(["py", "kymera.py", "-d", directory, "-z", "1", "-w", "1"])
         else:
             window.button_previous.config(state=tk.NORMAL)
             window.button_next.config(state=tk.NORMAL)
@@ -146,6 +168,7 @@ def reload(window):
         window.input_answerkey.delete(0, tk.END)
         window.input_answerkey.insert(0, "path/to/answerkey.csv")
         window.input_answerkey_data.delete("1.0", tk.END)
+        
         window.input_answerkey_data.config(state=tk.DISABLED)
     
     if valid:
@@ -162,8 +185,13 @@ def reload(window):
             analysis.set(file, file_data)
         navigate(window)
     
-    if process is not None:
-        return reload(window)
+    # if process is not None:
+    #    progress = ttk.Progressbar(master=window.viewer, orient=tk.HORIZONTAL, length=100, mode="indeterminate")
+    #    progress.place(x=0, y=0, width=int((window.screen_width * .66)))
+    #    progress["value"] = 30
+    #    progress["value"] = 100
+    #    progress.destroy()
+    #    return reload(window)
 
 def navigate(window, step=0):
     directory = window.input_directory.get().strip()
