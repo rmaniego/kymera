@@ -58,7 +58,7 @@ class KymeraGui:
         # self.input_ocr_data.insert(0, "Lorem ipsum")
         self.input_ocr_data.place(x=int(self.gallery_max_width + 30), y=50, width=int((self.gallery_max_width)), height=self.gallery_max_height)
         
-        self.label_file = tk.Label(master=self.viewer, text="File:", anchor='w')
+        self.label_file = tk.Label(master=self.viewer, text="File:", anchor="w")
         self.label_file.config(font=("Consolas", 10))
         self.label_file.place(x=int(self.gallery_max_width + 30), y=int((self.gallery_max_height + 55)), width=self.gallery_max_width)
         
@@ -70,6 +70,12 @@ class KymeraGui:
         self.input_grade.config(font=("Consolas", 20), state=tk.DISABLED)
         self.input_grade.insert(0, "0")
         self.input_grade.place(x=int((self.gallery_max_width + 170)), y=int((screen_height - 140)), width=int((self.gallery_max_width - 140)))
+        
+        self.locked = tk.IntVar()
+        self.check_locked = tk.Checkbutton(master=self.viewer, text="Skip during analysis", var=self.locked, anchor="w")
+        self.check_locked.config(state=tk.DISABLED)
+        self.check_locked.place(x=int((self.gallery_max_width + 30)), y=int((screen_height - 90)), width=self.gallery_max_width)
+        self.locked.set(0)
         
         self.editor = tk.Frame(master=self.window, width=int((screen_width * .33)), height=screen_height, bg="blue")
         self.editor.pack(fill=tk.BOTH, side=tk.LEFT)
@@ -101,8 +107,12 @@ def validate(value, minimum, maximum, fallback):
 
 def reload(window):
     valid = True
-    directory = window.input_directory.get().strip()    
+    directory = window.input_directory.get().strip()
+    window.button_previous.config(state=tk.NORMAL)
+    window.button_next.config(state=tk.NORMAL)
     window.input_ocr_data.config(state=tk.NORMAL)
+    window.input_grade.config(state=tk.NORMAL)
+    window.check_locked.config(state=tk.NORMAL)
     if not check_path(directory):
         window.input_directory.delete(0, tk.END)
         window.input_directory.insert(0, "path/to/pdf/directory")
@@ -115,6 +125,8 @@ def reload(window):
         window.button_next.config(state=tk.DISABLED)
         window.input_grade.delete(0, tk.END)
         window.input_grade.insert(0, "0")
+        window.input_grade.config(state=tk.DISABLED)
+        window.check_locked.config(state=tk.DISABLED)
         window.input_ocr_data.delete("1.0", tk.END)
         window.input_ocr_data.config(state=tk.DISABLED)
         valid = False
@@ -136,9 +148,10 @@ def reload(window):
         grade = validate(grade, 0, 100, 0)
         analysis = Arkivist(f"{directory}/kymera/analysis.json")
         file = window.label_file["text"]
-        file_data = analysis.get(file, {})
-        file_data.update({"grade": grade})
-        analysis.set(file, file_data)
+        if check_path(f"{directory}/{file}"):
+            file_data = analysis.get(file, {})
+            file_data.update({"grade": grade})
+            analysis.set(file, file_data)
         navigate(window)
 
 def navigate(window, step=0):
@@ -191,6 +204,8 @@ def navigate(window, step=0):
             file = files[index]
             file_data = analysis.get(file, {})
             
+            window.locked.set(file_data.get("locked", 0))
+            
             ocr_result = file_data.get("text", "")
             window.input_ocr_data.delete("1.0", tk.END)
             window.input_ocr_data.insert(tk.INSERT, ocr_result)
@@ -214,14 +229,27 @@ def navigate(window, step=0):
             window.gallery.configure(image=image)
             window.gallery.image = image
 
+def lock_data(window):
+    directory = window.input_directory.get().strip()
+    if check_path(directory):
+        file = window.label_file["text"]
+        locked = 1
+        if window.locked.get() == 1:
+            locked = 0
+        analysis = Arkivist(f"{directory}/kymera/analysis.json")
+        file_data = analysis.get(file, {})
+        file_data.update({"locked": locked})
+        analysis.set(file, file_data)
+
 def modify_ocr(window):
     directory = window.input_directory.get().strip()
-    file = window.label_file["text"]
-    modified = window.input_ocr_data.get("1.0", tk.END)
-    analysis = Arkivist(f"{directory}/kymera/analysis.json")
-    file_data = analysis.get(file, {})
-    file_data.update({"text": modified})
-    analysis.set(file, file_data)
+    if check_path(directory):
+        file = window.label_file["text"]
+        modified = window.input_ocr_data.get("1.0", tk.END)
+        analysis = Arkivist(f"{directory}/kymera/analysis.json")
+        file_data = analysis.get(file, {})
+        file_data.update({"text": modified})
+        analysis.set(file, file_data)
 
 if __name__ == "__main__":
     root = KymeraGui()
@@ -229,5 +257,6 @@ if __name__ == "__main__":
     window.bind("<Return>", (lambda x: reload(root)))
     root.button_previous.bind("<Button-1>", (lambda x: navigate(root, -1)))
     root.button_next.bind("<Button-1>", (lambda x: navigate(root, 1)))
+    root.check_locked.bind("<Button-1>", (lambda x: lock_data(root)))
     root.input_ocr_data.bind("<KeyRelease>", (lambda x: modify_ocr(root)))
     window.tk.mainloop()

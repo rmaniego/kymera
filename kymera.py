@@ -76,28 +76,30 @@ def pdf_parse(directory, tesseract, answerkey=None, zoomfactor=1, spellcheck=0, 
     filenames = get_filenames(directory, extensions)
     for index, filename in enumerate(filenames):
         fullpath = f"{directory}/{filename}"
-        
-        text = ""
-        pages = []
-        with fitz.Document(fullpath) as doc:
-            print(f" - {fullpath}")
-            for i, page in enumerate(doc):
-                count = i + 1
-                matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
-                pixels = page.getPixmap(matrix=matrix)
-                pixels.writePNG(f"{directory}/kymera/img/{filename[:-4]}-{i}.png")
-                img_path = f"{directory}/kymera/img/{filename[:-4]}-{i}.png"
-                text += f"===\nPAGE {count}\n===\n"
-                text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
-                text += "\n"
-                if gather == 1:
-                    handwriting(img_path)
-                pages.append(img_path)
-        if write == 1:
-            text_filename = ".".join(list(filename.split("."))[:-1])
-            with open(f"{directory}/kymera/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
-                file.write(text)
-        analysis.set(filename, {"pages": pages, "text": text})
+        file_data = analysis.get(filename, {})
+        if file_data.get("locked", 0) == 0:
+            text = ""
+            pages = []
+            with fitz.Document(fullpath) as doc:
+                print(f" - {fullpath}")
+                for i, page in enumerate(doc):
+                    count = i + 1
+                    matrix = fitz.Matrix(zoomfactor, zoomfactor)  # zoom factor
+                    pixels = page.getPixmap(matrix=matrix)
+                    pixels.writePNG(f"{directory}/kymera/img/{filename[:-4]}-{i}.png")
+                    img_path = f"{directory}/kymera/img/{filename[:-4]}-{i}.png"
+                    text += f"===\nPAGE {count}\n===\n"
+                    text += lint.autocorrect(ocr_api2(img_path, tesseract), spellcheck=spellcheck)
+                    text += "\n"
+                    if gather == 1:
+                        handwriting(img_path)
+                    pages.append(img_path)
+            if write == 1:
+                text_filename = ".".join(list(filename.split("."))[:-1])
+                with open(f"{directory}/kymera/text/{text_filename}.txt", "w+", encoding="utf-8") as file:
+                    file.write(text)
+            file_data.update({"pages": pages, "text": text})
+        analysis.set(filename, file_data)
 
 def ocr_api2(path, tesseract):
     try:
