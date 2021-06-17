@@ -34,7 +34,7 @@ class KymeraGui:
         self.screen_width = self.window.winfo_screenwidth()
         self.screen_height = self.window.winfo_screenheight()
         
-        self.viewer = tk.Frame(master=self.window, width=int((self.screen_width * .66)), height=self.screen_height, bg="yellow")
+        self.viewer = tk.Frame(master=self.window, width=int((self.screen_width * .66)), height=self.screen_height)
         self.viewer.pack(fill=tk.BOTH, side=tk.LEFT)
         
         self.input_directory = tk.Entry(master=self.viewer)
@@ -80,7 +80,7 @@ class KymeraGui:
         self.check_locked.place(x=int((self.gallery_max_width + 30)), y=int((self.screen_height - 90)), width=self.gallery_max_width)
         self.locked.set(0)
         
-        self.editor = tk.Frame(master=self.window, width=int((self.screen_width - (self.screen_width* .66))), height=self.screen_height, bg="blue")
+        self.editor = tk.Frame(master=self.window, width=int((self.screen_width - (self.screen_width* .66))), height=self.screen_height)
         self.editor.pack(fill=tk.BOTH, side=tk.LEFT)
         
         self.input_answerkey = tk.Entry(master=self.editor)
