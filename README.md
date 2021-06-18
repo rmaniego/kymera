@@ -2,6 +2,7 @@
 
 # kymera v1.2.0
 PDF submissions auto-checker for teachers.
+Text can be chimeric at times, often formatted into files ranging from simple text files to complex objects. PDF file is one of the more complex files that may contain additional image objects aside from textual data. The automation of checking of PDF file can drastically improve efficiency, by removing redundancy of work, especially when running over multiple of files.
 
 ## Requirements
 - [cv2](https://pypi.org/project/cv2/) `pip install cv2`
@@ -51,3 +52,7 @@ $ py kymera.py -d "<path_to_pdf_files>" -o "<path_to_tesseract.exe>" -a "<path_t
 
 ## Status
 - Accuracy = 0%
+
+
+## Did you know?
+The repository name `kymera` was inspired from the mythological creature called Chimera, an animal with body parts from different creatures.
